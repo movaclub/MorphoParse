@@ -1,0 +1,94 @@
+#!/usr/bin/perl
+use strict;
+use warnings;
+use utf8;
+use Slanger::Filer;
+use Slanger::Interactor;
+
+my %matrix = (
+  'system' => {
+    'createnewplace' => sub {
+          my ($uid, $reserved) = @_;
+          # $uid       - user id
+          # $reserved  - quote for user by package
+
+          &Slanger::Common::create_user( $uid, $reserved );
+    },
+  },
+  'interactor' => {
+    'preparefile' => sub {
+          my ($uid, $ufilename, $ufname) = @_;
+          # $uid       - user id
+          # $ufilename - filename in tmpupload directory
+          # $ufname    - filename is wrote by user
+          # $direction - translate direction (enru, ruen, zhtru, zhten, zhsru, zhsen, ruzht, ruzhs, enzht, enzhs)
+
+          my $filecont = &Slanger::Common::file_get_content( $ufilename );
+          my $fid = &Slanger::Filer::addfile( $uid, $ufname, $filecont );
+          &Slanger::Interactor::splitter( $uid, $fid );
+          &Slanger::Interactor::needer_forxml( $uid, $fid );
+          return $fid;
+    },
+    'stringtrans' => sub {
+          my ($uid, $fid, $numstr, $direction) = @_;
+          # $uid       - user id
+          # $fid       - file id
+          # $numstr    - string number in fid file
+          # $direction - translate direction (enru, ruen, zhtru, zhten, zhsru, zhsen, ruzht, ruzhs, enzht, enzhs)
+
+          &Slanger::Interactor::getstr_by_num( $uid, $fid, $numstr, $direction );
+    },
+    'savetarget' => sub {
+          my ($uid, $fid, $ufilename, $direction) = @_;
+          # $uid       - user id
+          # $fid       - file ID (src and trg)
+          # $ufilename - filename in tmpupload directory
+          # $direction - translate direction (enru, ruen, zhtru, zhten, zhsru, zhsen, ruzht, ruzhs, enzht, enzhs)
+
+          my $filecont = &Slanger::Common::file_get_content( $ufilename );
+          &Slanger::Filer::replacefile( $uid, $fid, $filecont, $direction ); # trg only
+    },
+  },
+  'filer' => {
+    'addfile' => sub {
+          my ($uid, $ufilename, $ufname) = @_;
+          # $uid       - user id
+          # $ufilename - filename in tmpupload directory
+          # $ufname    - filename is wrote by user
+
+          my $filecont = &Slanger::Common::file_get_content( $ufilename );
+          &Slanger::Filer::addfile( $uid, $ufname, $filecont );
+    },
+    'delfile' => sub {
+          my ($uid, $fid, $dire) = @_;
+          # $uid       - user id
+          # $fid       - file id
+          # $dire      - src | trg
+
+          &Slanger::Filer::deletefile( $uid, $fid, $dire );
+    },
+    'renamefile' => sub {
+          my ($uid, $fid, $ufname, $dire) = @_;
+          # $uid       - user id
+          # $fid       - file id
+          # $ufname    - new name for file
+          # $dire      - src | trg
+
+          &Slanger::Filer::renamefile( $uid, $fid, $ufname, $dire );
+    },
+    'autoprocess' => sub {
+          my ($uid, $fid, $direction) = @_;
+          &Slanger::Filer::process($uid, $fid, $direction);
+    }
+  }
+);
+
+my $commandline  = shift;                                               # topic:command:param
+my ($topic, $command, $cfile, $param) = split(':', $commandline);       # param  -  ';' separated param string;
+my @paramar = split('#', $param);
+#print "\n", $commandline, "\n";
+
+my $resulttofile = $matrix{$topic}{$command}->( @_ = @paramar ) if ( exists $matrix{$topic}{$command} );
+open( FL,'>:utf8', $Slanger::Common::pathroot.qq[/cmpfiles/$cfile.go] ) or die $!; print FL $resulttofile; close(FL);
+
+exit(0);
